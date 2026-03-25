@@ -7,11 +7,24 @@ import match.T20Match;
 import scoreboard.ScoreboardManager;
 import team.Team;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.util.Random;
 import java.util.Scanner;
 
 public class CricketScoreboardApplication {
     public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
+        Scanner sc;
+        if (args.length > 0) {
+            try {
+                sc = new Scanner(new File(args[0]));
+            } catch (FileNotFoundException e) {
+                System.out.println("Error: Script file not found: " + args[0]);
+                return;
+            }
+        } else {
+            sc = new Scanner(System.in);
+        }
 
         try {
             System.out.println("===== Cricket Scoreboard Application =====");
@@ -60,7 +73,10 @@ public class CricketScoreboardApplication {
                 throw new InvalidBallInputException("Invalid batting team selection.");
             }
 
-            ScoreboardManager manager = new ScoreboardManager(match, sc);
+            boolean autoMode = readYesNo(sc, "Enable auto-simulation mode (random events without manual input)? (y/N): ");
+            Random random = new Random();
+
+            ScoreboardManager manager = new ScoreboardManager(match, sc, autoMode, random);
             manager.startMatch(firstBattingTeam);
 
         } catch (InvalidBallInputException e) {
@@ -82,6 +98,9 @@ public class CricketScoreboardApplication {
     }
 
     private static int readInt(Scanner sc) throws InvalidBallInputException {
+        if (!sc.hasNextLine()) {
+            throw new InvalidBallInputException("End of input.");
+        }
         String line = sc.nextLine().trim();
         if (line.isEmpty()) {
             throw new InvalidBallInputException("Empty input.");
@@ -91,5 +110,18 @@ public class CricketScoreboardApplication {
         } catch (NumberFormatException e) {
             throw new InvalidBallInputException("Expected a number.");
         }
+    }
+
+    private static boolean readYesNo(Scanner sc, String prompt) {
+        System.out.print(prompt);
+        if (!sc.hasNextLine()) {
+            return false;
+        }
+        String line = sc.nextLine().trim();
+        if (line.isEmpty()) {
+            return false;
+        }
+        char c = Character.toLowerCase(line.charAt(0));
+        return c == 'y' || c == '1' || c == 't';
     }
 }

@@ -7,6 +7,7 @@ import statistics.Statistics;
 import team.Player;
 import team.Team;
 
+import java.util.Random;
 import java.util.Scanner;
 
 public class ScoreboardManager implements Statistics {
@@ -14,10 +15,18 @@ public class ScoreboardManager implements Statistics {
 
     private final Match match;
     private final Scanner scanner;
+    private final boolean autoMode;
+    private final Random random;
 
     public ScoreboardManager(Match match, Scanner scanner) {
+        this(match, scanner, false, new Random());
+    }
+
+    public ScoreboardManager(Match match, Scanner scanner, boolean autoMode, Random random) {
         this.match = match;
         this.scanner = scanner;
+        this.autoMode = autoMode;
+        this.random = random == null ? new Random() : random;
     }
 
     public void startMatch(Team firstBattingTeam) {
@@ -48,6 +57,11 @@ public class ScoreboardManager implements Statistics {
 
         while (inn.getLegalBalls() < limitBalls && !inn.isAllOut()) {
             if (target > 0 && inn.getTotalRuns() >= target) {
+                break;
+            }
+
+            if (!autoMode && !scanner.hasNextLine()) {
+                System.out.println("End of input reached.");
                 break;
             }
 
@@ -107,38 +121,89 @@ public class ScoreboardManager implements Statistics {
     private boolean takeBallInput(InningsScore inn, OverStats overStats, boolean freeHit)
             throws InvalidBallInputException {
         String name = inn.getStriker().getName();
-        int choice = readInt("Enter event [1-Runs, 2-Wide, 3-No Ball, 4-Wicket]: ");
+        String line;
 
-        if (choice == 1) {
-            int runs = readInt("Enter runs (0,1,2,3,4,6): ");
-            recordBall(inn, runs, overStats);
-            System.out.println(name + " scored " + runs + " run(s)");
-            freeHit = false;
-        } else if (choice == 2) {
-            recordBall(inn, "WIDE", overStats);
-            System.out.println("Wide ball +1");
-        } else if (choice == 3) {
-            recordBall(inn, "NO_BALL", overStats);
-            System.out.println("No ball +1, next ball free hit");
-            freeHit = true;
-        } else if (choice == 4) {
+        if (autoMode) {
+            line = generateAutoEvent(inn, freeHit);
+            System.out.println("Enter event: " + line + " (auto)");
+        } else {
+            System.out.print("Enter event: ");
+            line = scanner.nextLine().trim();
+        }
+
+        String normalized = line.trim();
+        if (normalized.isEmpty()) {
+            throw new InvalidBallInputException("Empty input");
+        }
+
+        String upper = normalized.toUpperCase();
+
+        // Wide with optional runs (e.g., Wd, Wd 2)
+        if (upper.startsWith("WD")) {
+            int runs = parseTrailingNumber(normalized, 1);
+            recordWide(inn, runs, overStats);
+            System.out.println("Wide ball +" + runs);
+            return freeHit;
+        }
+
+        // No ball with optional bat runs (Nb, Nb 2, Nb4)
+        if (upper.startsWith("NB")) {
+            int batRuns = parseTrailingNumber(normalized, 0);
+            recordNoBall(inn, batRuns, overStats);
+            System.out.println("No ball +1" + (batRuns > 0 ? " and " + batRuns + " run(s) off the bat" : "")
+                    + ", next ball free hit");
+            return true;
+        }
+
+        // Byes (B 1, Bye 2)
+        if (upper.startsWith("B")) {
+            int runs = parseTrailingNumber(normalized, 1);
+            recordBye(inn, runs, overStats);
+            System.out.println("Byes " + runs + " run(s)");
+            return false;
+        }
+
+        // Leg byes (LB 1, LegBye 2)
+        if (upper.startsWith("LB")) {
+            int runs = parseTrailingNumber(normalized, 1);
+            recordLegBye(inn, runs, overStats);
+            System.out.println("Leg byes " + runs + " run(s)");
+            return false;
+        }
+
+        // Penalty runs (P 5)
+        if (upper.startsWith("P")) {
+            int runs = parseTrailingNumber(normalized, 5);
+            inn.addPenaltyRuns(runs);
+            System.out.println("Penalty runs added: " + runs);
+            return freeHit;
+        }
+
+        // Wicket
+        if (upper.equals("W") || upper.equals("WICKET")) {
             if (freeHit) {
                 System.out.println("Free hit - wicket not counted, dot ball only");
                 inn.recordDotBall();
-                freeHit = false;
-            } else {
-                recordBall(inn, "WICKET", overStats);
-                System.out.println(name + " is OUT");
+                return false;
             }
-        } else {
-            throw new InvalidBallInputException("Invalid menu choice.");
+            recordWicket(inn, overStats);
+            System.out.println(name + " is OUT");
+            return false;
         }
 
-        return freeHit;
+        // Numeric runs
+        try {
+            int runs = Integer.parseInt(normalized);
+            recordRuns(inn, runs, overStats);
+            System.out.println(name + " scored " + runs + " run(s)");
+            return false;
+        } catch (NumberFormatException e) {
+            throw new InvalidBallInputException("Unknown event: " + normalized);
+        }
     }
 
     // runs
-    private void recordBall(InningsScore inn, int runs, OverStats overStats) throws InvalidBallInputException {
+    private void recordRuns(InningsScore inn, int runs, OverStats overStats) throws InvalidBallInputException {
         validateRuns(runs);
         inn.addRuns(runs);
         if (runs == 4) {
@@ -148,19 +213,95 @@ public class ScoreboardManager implements Statistics {
         }
     }
 
-    // extras
-    private void recordBall(InningsScore inn, String event, OverStats overStats) throws InvalidBallInputException {
-        if ("WIDE".equals(event)) {
-            inn.addWide();
-            overStats.incrementWides();
-        } else if ("NO_BALL".equals(event)) {
-            inn.addNoBall();
-            overStats.incrementNoBalls();
-        } else if ("WICKET".equals(event)) {
-            inn.recordWicket();
-            overStats.incrementWickets();
-        } else {
-            throw new InvalidBallInputException("Unknown ball event: " + event);
+    private void recordWicket(InningsScore inn, OverStats overStats) {
+        inn.recordWicket();
+        overStats.incrementWickets();
+    }
+
+    private void recordWide(InningsScore inn, int runs, OverStats overStats) throws InvalidBallInputException {
+        if (runs <= 0) {
+            throw new InvalidBallInputException("Wide runs must be >=1");
+        }
+        inn.addWide(runs);
+        overStats.incrementWides();
+    }
+
+    private void recordNoBall(InningsScore inn, int batRuns, OverStats overStats) throws InvalidBallInputException {
+        if (batRuns < 0) {
+            throw new InvalidBallInputException("No-ball bat runs cannot be negative");
+        }
+        inn.addNoBall(batRuns);
+        if (batRuns == 4) {
+            overStats.incrementFours();
+        } else if (batRuns == 6) {
+            overStats.incrementSixes();
+        }
+        overStats.incrementNoBalls();
+    }
+
+    private void recordBye(InningsScore inn, int runs, OverStats overStats) throws InvalidBallInputException {
+        if (runs < 0) {
+            throw new InvalidBallInputException("Bye runs cannot be negative");
+        }
+        inn.addBye(runs);
+    }
+
+    private void recordLegBye(InningsScore inn, int runs, OverStats overStats) throws InvalidBallInputException {
+        if (runs < 0) {
+            throw new InvalidBallInputException("Leg bye runs cannot be negative");
+        }
+        inn.addLegBye(runs);
+    }
+
+    private String generateAutoEvent(InningsScore inn, boolean freeHit) {
+        int roll = random.nextInt(100);
+
+        if (!freeHit && roll >= 80 && roll < 88 && inn.getWickets() < Match.MAX_WICKETS) {
+            return "W";
+        }
+
+        if (roll < 10) {
+            int runs = randomRuns();
+            return String.valueOf(runs);
+        } else if (roll < 25) {
+            int runs = randomRuns();
+            return String.valueOf(runs);
+        } else if (roll < 35) {
+            int runs = random.nextInt(3) + 1; // 1-3 wides
+            return runs == 1 ? "Wd" : "Wd " + runs;
+        } else if (roll < 50) {
+            int batRuns = random.nextInt(4); // 0-3 bat runs on no-ball
+            if (batRuns == 3 && random.nextBoolean()) {
+                batRuns = 4; // occasional boundary on no-ball
+            }
+            return batRuns == 0 ? "Nb" : "Nb " + batRuns;
+        } else if (roll < 65) {
+            int runs = random.nextInt(4); // 0-3 byes
+            return "B " + runs;
+        } else if (roll < 80) {
+            int runs = random.nextInt(3); // 0-2 leg byes
+            return "LB " + runs;
+        }
+
+        int runs = randomRuns();
+        return String.valueOf(runs);
+    }
+
+    private int randomRuns() {
+        int[] choices = { 0, 0, 1, 1, 1, 2, 3, 4, 6 };
+        return choices[random.nextInt(choices.length)];
+    }
+
+    private int parseTrailingNumber(String text, int defaultValue) throws InvalidBallInputException {
+        String trimmed = text.trim();
+        String digits = trimmed.replaceAll("[^0-9]", "");
+        if (digits.isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(digits);
+        } catch (NumberFormatException e) {
+            throw new InvalidBallInputException("Invalid number in input: " + text);
         }
     }
 
@@ -177,6 +318,9 @@ public class ScoreboardManager implements Statistics {
     // read number
     private int readInt(String msg) throws InvalidBallInputException {
         System.out.print(msg);
+        if (!scanner.hasNextLine()) {
+            throw new InvalidBallInputException("End of input.");
+        }
         String line = scanner.nextLine().trim();
         if (line.isEmpty()) {
             throw new InvalidBallInputException("Empty input.");
@@ -204,12 +348,15 @@ public class ScoreboardManager implements Statistics {
         System.out.println("\n===== Innings Complete: " + bat.getName() + " =====");
         System.out.println("Total: " + inn.getTotalRuns() + "/" + inn.getWickets()
                 + " in " + inn.getOversRepresentation() + " overs");
-        System.out.println("Balls played: " + inn.getTotalBalls() + " (legal " + inn.getLegalBalls()
-                + ", extras " + (inn.getWides() + inn.getNoBalls()) + ")");
+        System.out.println("Balls delivered: " + inn.getTotalBalls() + " (legal " + inn.getLegalBalls()
+                + ", wides " + inn.getWideDeliveries() + ", no-balls " + inn.getNoBallDeliveries() + ")");
         System.out.println(
                 "Avg per over: " + String.format("%.2f", calculateRunRate(inn.getTotalRuns(), inn.getLegalBalls())));
-        System.out.println("Extras: " + (inn.getWides() + inn.getNoBalls())
-                + " (Wides " + inn.getWides() + ", No Balls " + inn.getNoBalls() + ")");
+        int extras = inn.getWides() + inn.getNoBalls() + inn.getByeRuns() + inn.getLegByeRuns()
+                + inn.getPenaltyRuns();
+        System.out.println("Extras: " + extras + " (Wides " + inn.getWides() + ", No Balls " + inn.getNoBalls()
+                + ", Byes " + inn.getByeRuns() + ", Leg Byes " + inn.getLegByeRuns() + ", Penalties "
+                + inn.getPenaltyRuns() + ")");
 
         System.out.println("\nIndividual Player Scores:");
         for (Player p : bat.getPlayers()) {
@@ -269,7 +416,8 @@ public class ScoreboardManager implements Statistics {
         System.out.println("Avg per over: " + String.format("%.2f",
                 calculateRunRate(inn.getTotalRuns(), inn.getLegalBalls())));
         System.out.println("4s:" + inn.getFours() + " 6s:" + inn.getSixes() + " Wides:" + inn.getWides()
-                + " No Balls:" + inn.getNoBalls() + " Wickets:" + inn.getWickets());
+                + " No Balls:" + inn.getNoBalls() + " Byes:" + inn.getByeRuns() + " Leg Byes:" + inn.getLegByeRuns()
+                + " Penalties:" + inn.getPenaltyRuns() + " Wickets:" + inn.getWickets());
         System.out.println();
     }
 
@@ -280,6 +428,10 @@ public class ScoreboardManager implements Statistics {
         System.out.println("2- " + teamB.getName());
         System.out.println("3- Both");
         System.out.println("0- Skip");
+
+        if (!scanner.hasNextLine()) {
+            return;
+        }
 
         try {
             int ch = readInt("Enter choice: ");

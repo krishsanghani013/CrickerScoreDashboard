@@ -11,8 +11,13 @@ public class InningsScore {
     private int totalRuns;
     private int wickets;
     private int legalBalls;
-    private int wides;
-    private int noBalls;
+    private int wideDeliveries;
+    private int noBallDeliveries;
+    private int wideRuns;
+    private int noBallPenaltyRuns;
+    private int byeRuns;
+    private int legByeRuns;
+    private int penaltyRuns;
     private int fours;
     private int sixes;
 
@@ -28,14 +33,29 @@ public class InningsScore {
         this.nextBatsmanIndex = 2;
     }
 
-    public void addWide() {
-        this.totalRuns++;
-        this.wides++;
+    public void addWide(int runs) {
+        this.totalRuns += runs;
+        this.wideRuns += runs;
+        this.wideDeliveries++;
     }
 
-    public void addNoBall() {
-        this.totalRuns++;
-        this.noBalls++;
+    public void addNoBall(int batRuns) {
+        this.totalRuns += 1 + batRuns;
+        this.noBallPenaltyRuns += 1;
+        this.noBallDeliveries++;
+
+        if (batRuns > 0) {
+            Player striker = getStriker();
+            striker.addRuns(batRuns);
+            if (batRuns == 4) {
+                this.fours++;
+            } else if (batRuns == 6) {
+                this.sixes++;
+            }
+            if (batRuns % 2 != 0) {
+                rotateStrike();
+            }
+        }
     }
 
     public void addRuns(int runs) {
@@ -58,6 +78,31 @@ public class InningsScore {
     public void recordDotBall() {
         getStriker().faceDotBall();
         this.legalBalls++;
+    }
+
+    public void addBye(int runs) {
+        this.totalRuns += runs;
+        this.byeRuns += runs;
+        this.legalBalls++;
+        if (runs % 2 != 0) {
+            rotateStrike();
+        }
+        getStriker().faceDotBall();
+    }
+
+    public void addLegBye(int runs) {
+        this.totalRuns += runs;
+        this.legByeRuns += runs;
+        this.legalBalls++;
+        if (runs % 2 != 0) {
+            rotateStrike();
+        }
+        getStriker().faceDotBall();
+    }
+
+    public void addPenaltyRuns(int runs) {
+        this.totalRuns += runs;
+        this.penaltyRuns += runs;
     }
 
     public void recordWicket() {
@@ -118,15 +163,15 @@ public class InningsScore {
 
     // total balls
     public int getTotalBalls() {
-        return legalBalls + wides + noBalls;
+        return legalBalls + wideDeliveries + noBallDeliveries;
     }
 
     public int getWides() {
-        return wides;
+        return wideRuns;
     }
 
     public int getNoBalls() {
-        return noBalls;
+        return noBallPenaltyRuns;
     }
 
     public int getFours() {
@@ -135,5 +180,25 @@ public class InningsScore {
 
     public int getSixes() {
         return sixes;
+    }
+
+    public int getByeRuns() {
+        return byeRuns;
+    }
+
+    public int getLegByeRuns() {
+        return legByeRuns;
+    }
+
+    public int getPenaltyRuns() {
+        return penaltyRuns;
+    }
+
+    public int getWideDeliveries() {
+        return wideDeliveries;
+    }
+
+    public int getNoBallDeliveries() {
+        return noBallDeliveries;
     }
 }
