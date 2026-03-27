@@ -50,6 +50,7 @@ public class ScoreboardManager implements Statistics {
         InningsScore inn = new InningsScore(bat, bowl);
         OverStats overStats = new OverStats();
         boolean freeHit = false;
+        Player currentBowler = null;
 
         showInningsStart(bat, bowl);
 
@@ -68,10 +69,17 @@ public class ScoreboardManager implements Statistics {
             int overNum = inn.getLegalBalls() / Match.BALLS_PER_OVER + 1;
             int ballNum = inn.getLegalBalls() % Match.BALLS_PER_OVER + 1;
 
+            if ((ballNum == 1)) {
+                currentBowler = selectBowler(bowl, overNum);
+            }
+
             showBallHeader(overNum, ballNum, inn.getStriker().getName(), freeHit);
+            if (currentBowler != null) {
+                System.out.println("Bowler: " + currentBowler.getName());
+            }
 
             try {
-                freeHit = takeBallInput(inn, overStats, freeHit);
+                freeHit = takeBallInput(inn, overStats, freeHit, overNum, ballNum, currentBowler);
             } catch (InvalidBallInputException e) {
                 System.out.println("Wrong input: " + e.getMessage());
                 continue;
@@ -120,6 +128,11 @@ public class ScoreboardManager implements Statistics {
     // ball input
     private boolean takeBallInput(InningsScore inn, OverStats overStats, boolean freeHit)
             throws InvalidBallInputException {
+        return takeBallInput(inn, overStats, freeHit, 0, 0, null);
+    }
+
+    private boolean takeBallInput(InningsScore inn, OverStats overStats, boolean freeHit, int overNum, int ballNum,
+            Player currentBowler) throws InvalidBallInputException {
         String name = inn.getStriker().getName();
         String line;
 
@@ -141,7 +154,7 @@ public class ScoreboardManager implements Statistics {
         // Wide with optional runs (e.g., Wd, Wd 2)
         if (upper.startsWith("WD")) {
             int runs = parseTrailingNumber(normalized, 1);
-            recordWide(inn, runs, overStats);
+            recordWide(inn, runs, overStats, currentBowler);
             System.out.println("Wide ball +" + runs);
             return freeHit;
         }
@@ -149,7 +162,7 @@ public class ScoreboardManager implements Statistics {
         // No ball with optional bat runs (Nb, Nb 2, Nb4)
         if (upper.startsWith("NB")) {
             int batRuns = parseTrailingNumber(normalized, 0);
-            recordNoBall(inn, batRuns, overStats);
+            recordNoBall(inn, batRuns, overStats, currentBowler);
             System.out.println("No ball +1" + (batRuns > 0 ? " and " + batRuns + " run(s) off the bat" : "")
                     + ", next ball free hit");
             return true;
@@ -186,7 +199,7 @@ public class ScoreboardManager implements Statistics {
                 inn.recordDotBall();
                 return false;
             }
-            recordWicket(inn, overStats);
+            recordWicket(inn, overStats, overNum, ballNum, currentBowler);
             System.out.println(name + " is OUT");
             return false;
         }
@@ -194,7 +207,7 @@ public class ScoreboardManager implements Statistics {
         // Numeric runs
         try {
             int runs = Integer.parseInt(normalized);
-            recordRuns(inn, runs, overStats);
+            recordRuns(inn, runs, overStats, currentBowler);
             System.out.println(name + " scored " + runs + " run(s)");
             return false;
         } catch (NumberFormatException e) {
@@ -203,9 +216,13 @@ public class ScoreboardManager implements Statistics {
     }
 
     // runs
-    private void recordRuns(InningsScore inn, int runs, OverStats overStats) throws InvalidBallInputException {
+    private void recordRuns(InningsScore inn, int runs, OverStats overStats, Player bowler)
+            throws InvalidBallInputException {
         validateRuns(runs);
         inn.addRuns(runs);
+        if (bowler != null) {
+            bowler.addBowlingRuns(runs);
+        }
         if (runs == 4) {
             overStats.incrementFours();
         } else if (runs == 6) {
@@ -213,24 +230,32 @@ public class ScoreboardManager implements Statistics {
         }
     }
 
-    private void recordWicket(InningsScore inn, OverStats overStats) {
-        inn.recordWicket();
+    private void recordWicket(InningsScore inn, OverStats overStats, int overNum, int ballNum, Player bowler) {
+        inn.recordWicket(overNum, ballNum, bowler);
         overStats.incrementWickets();
     }
 
-    private void recordWide(InningsScore inn, int runs, OverStats overStats) throws InvalidBallInputException {
+    private void recordWide(InningsScore inn, int runs, OverStats overStats, Player bowler)
+            throws InvalidBallInputException {
         if (runs <= 0) {
             throw new InvalidBallInputException("Wide runs must be >=1");
         }
         inn.addWide(runs);
+        if (bowler != null) {
+            bowler.addBowlingRuns(runs);
+        }
         overStats.incrementWides();
     }
 
-    private void recordNoBall(InningsScore inn, int batRuns, OverStats overStats) throws InvalidBallInputException {
+    private void recordNoBall(InningsScore inn, int batRuns, OverStats overStats, Player bowler)
+            throws InvalidBallInputException {
         if (batRuns < 0) {
             throw new InvalidBallInputException("No-ball bat runs cannot be negative");
         }
         inn.addNoBall(batRuns);
+        if (bowler != null) {
+            bowler.addBowlingRuns(1 + batRuns);
+        }
         if (batRuns == 4) {
             overStats.incrementFours();
         } else if (batRuns == 6) {
@@ -305,6 +330,25 @@ public class ScoreboardManager implements Statistics {
         }
     }
 
+    private Player selectBowler(Team bowlingTeam, int overNum) {
+        if (autoMode) {
+            Player[] players = bowlingTeam.getPlayers();
+            return players[random.nextInt(players.length)];
+        }
+        System.out.print("Enter bowler for over " + overNum + ": ");
+        String name = scanner.hasNextLine() ? scanner.nextLine().trim() : "";
+        if (name.isEmpty()) {
+            return null;
+        }
+        for (Player p : bowlingTeam.getPlayers()) {
+            if (p.getName().equalsIgnoreCase(name)) {
+                return p;
+            }
+        }
+        // if not matched, create a temp placeholder bowler name
+        return new Player(name);
+    }
+
     // check runs
     private void validateRuns(int runs) throws InvalidBallInputException {
         for (int i = 0; i < VALID_RUNS.length; i++) {
@@ -364,6 +408,13 @@ public class ScoreboardManager implements Statistics {
             System.out.println("- " + p.getName() + ": " + p.getRuns() + " (" + p.getBallsFaced()
                     + ") 4s:" + p.getFours() + " 6s:" + p.getSixes() + " [" + status + "]");
         }
+
+        if (!inn.getWicketEvents().isEmpty()) {
+            System.out.println("\nWickets:");
+            for (WicketEvent w : inn.getWicketEvents()) {
+                System.out.println(" - " + w.getOverBall() + ": " + w.getBatter() + " b " + w.getBowler());
+            }
+        }
     }
 
     @Override
@@ -406,6 +457,12 @@ public class ScoreboardManager implements Statistics {
         System.out.println("Overall Wides: " + (inn1.getWides() + inn2.getWides()));
         System.out.println("Overall No Balls: " + (inn1.getNoBalls() + inn2.getNoBalls()));
         System.out.println("Overall Wickets: " + (inn1.getWickets() + inn2.getWickets()));
+
+        Player mvp = determineMVP(match.getTeamA(), match.getTeamB());
+        if (mvp != null) {
+            System.out.println("\nMVP (Player of the Match): " + mvp.getName() + " | Runs: " + mvp.getRuns()
+                    + ", Wickets: " + mvp.getWicketsTaken() + ", Runs Conceded: " + mvp.getRunsConceded());
+        }
     }
 
     // team suummary
@@ -419,6 +476,31 @@ public class ScoreboardManager implements Statistics {
                 + " No Balls:" + inn.getNoBalls() + " Byes:" + inn.getByeRuns() + " Leg Byes:" + inn.getLegByeRuns()
                 + " Penalties:" + inn.getPenaltyRuns() + " Wickets:" + inn.getWickets());
         System.out.println();
+    }
+
+    private Player determineMVP(Team teamA, Team teamB) {
+        Player best = null;
+        int bestScore = Integer.MIN_VALUE;
+        for (Player p : teamA.getPlayers()) {
+            int sc = computeScore(p);
+            if (sc > bestScore) {
+                best = p;
+                bestScore = sc;
+            }
+        }
+        for (Player p : teamB.getPlayers()) {
+            int sc = computeScore(p);
+            if (sc > bestScore) {
+                best = p;
+                bestScore = sc;
+            }
+        }
+        return best;
+    }
+
+    private int computeScore(Player p) {
+        // Simple heuristic: batting runs + (wickets * 25) - (runs conceded / 2)
+        return p.getRuns() + (p.getWicketsTaken() * 25) - (p.getRunsConceded() / 2);
     }
 
     // show players
@@ -458,6 +540,7 @@ public class ScoreboardManager implements Statistics {
             String status = p.isOut() ? "out" : "not out";
             System.out.println((i + 1) + ". " + p.getName() + " - " + p.getRuns()
                     + " (" + p.getBallsFaced() + ") 4s:" + p.getFours() + " 6s:" + p.getSixes()
+                    + " | Wkts:" + p.getWicketsTaken() + " RunsConceded:" + p.getRunsConceded()
                     + " [" + status + "]");
         }
     }

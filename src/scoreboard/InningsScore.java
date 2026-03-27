@@ -3,6 +3,8 @@ package scoreboard;
 import match.Match;
 import team.Player;
 import team.Team;
+import java.util.ArrayList;
+import java.util.List;
 
 public class InningsScore {
     private Team battingTeam;
@@ -20,6 +22,7 @@ public class InningsScore {
     private int penaltyRuns;
     private int fours;
     private int sixes;
+    private List<WicketEvent> wicketEvents;
 
     private int strikerIndex;
     private int nonStrikerIndex;
@@ -31,6 +34,7 @@ public class InningsScore {
         this.strikerIndex = 0;
         this.nonStrikerIndex = 1;
         this.nextBatsmanIndex = 2;
+        this.wicketEvents = new ArrayList<>();
     }
 
     public void addWide(int runs) {
@@ -105,13 +109,18 @@ public class InningsScore {
         this.penaltyRuns += runs;
     }
 
-    public void recordWicket() {
+    public void recordWicket(int overNumber, int ballNumber, Player bowler) {
         Player striker = getStriker();
         striker.faceDotBall();
         striker.setOut(true);
 
         this.wickets++;
         this.legalBalls++;
+        String bowlerName = bowler != null ? bowler.getName() : "Unknown";
+        this.wicketEvents.add(new WicketEvent(striker.getName(), bowlerName, overNumber, ballNumber));
+        if (bowler != null) {
+            bowler.addWicketTaken();
+        }
 
         if (wickets < Match.MAX_WICKETS && nextBatsmanIndex < Match.PLAYERS_PER_TEAM) {
             strikerIndex = nextBatsmanIndex;
@@ -200,5 +209,9 @@ public class InningsScore {
 
     public int getNoBallDeliveries() {
         return noBallDeliveries;
+    }
+
+    public List<WicketEvent> getWicketEvents() {
+        return wicketEvents;
     }
 }

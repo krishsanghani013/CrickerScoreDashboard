@@ -7,6 +7,8 @@ public class Player {
     private int fours;
     private int sixes;
     private boolean isOut;
+    private int wicketsTaken;
+    private int runsConceded;
 
     public Player(String name) {
         this.name = name;
@@ -52,5 +54,22 @@ public class Player {
 
     public boolean isOut() {
         return isOut;
+    }
+
+    // bowling stats
+    public void addBowlingRuns(int runs) {
+        this.runsConceded += runs;
+    }
+
+    public void addWicketTaken() {
+        this.wicketsTaken++;
+    }
+
+    public int getWicketsTaken() {
+        return wicketsTaken;
+    }
+
+    public int getRunsConceded() {
+        return runsConceded;
     }
 }
