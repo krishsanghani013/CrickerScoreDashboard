@@ -1,14 +1,13 @@
 package scoreboard;
 
 import exception.InvalidBallInputException;
+import java.util.Random;
+import java.util.Scanner;
 import match.Match;
 import statistics.OverStats;
 import statistics.Statistics;
 import team.Player;
 import team.Team;
-
-import java.util.Random;
-import java.util.Scanner;
 
 public class ScoreboardManager implements Statistics {
     private static final int[] VALID_RUNS = { 0, 1, 2, 3, 4, 6 };
@@ -151,7 +150,7 @@ public class ScoreboardManager implements Statistics {
 
         String upper = normalized.toUpperCase();
 
-        // Wide with optional runs (e.g., Wd, Wd 2)
+        // Wide with optional runs
         if (upper.startsWith("WD")) {
             int runs = parseTrailingNumber(normalized, 1);
             recordWide(inn, runs, overStats, currentBowler);
@@ -159,7 +158,7 @@ public class ScoreboardManager implements Statistics {
             return freeHit;
         }
 
-        // No ball with optional bat runs (Nb, Nb 2, Nb4)
+        // No ball with optional bat runs
         if (upper.startsWith("NB")) {
             int batRuns = parseTrailingNumber(normalized, 0);
             recordNoBall(inn, batRuns, overStats, currentBowler);
@@ -168,7 +167,7 @@ public class ScoreboardManager implements Statistics {
             return true;
         }
 
-        // Byes (B 1, Bye 2)
+        // Byes
         if (upper.startsWith("B")) {
             int runs = parseTrailingNumber(normalized, 1);
             recordBye(inn, runs, overStats);
@@ -176,7 +175,7 @@ public class ScoreboardManager implements Statistics {
             return false;
         }
 
-        // Leg byes (LB 1, LegBye 2)
+        // Leg byes
         if (upper.startsWith("LB")) {
             int runs = parseTrailingNumber(normalized, 1);
             recordLegBye(inn, runs, overStats);
@@ -184,7 +183,7 @@ public class ScoreboardManager implements Statistics {
             return false;
         }
 
-        // Penalty runs (P 5)
+        // Penalty runs
         if (upper.startsWith("P")) {
             int runs = parseTrailingNumber(normalized, 5);
             inn.addPenaltyRuns(runs);
@@ -499,7 +498,7 @@ public class ScoreboardManager implements Statistics {
     }
 
     private int computeScore(Player p) {
-        // Simple heuristic: batting runs + (wickets * 25) - (runs conceded / 2)
+        // Simple heuristic: runs + wickets*25 - runsConceded/2
         return p.getRuns() + (p.getWicketsTaken() * 25) - (p.getRunsConceded() / 2);
     }
 
