@@ -1,17 +1,19 @@
 package team;
 
 public class Player {
-    private String name;
+    private final String name;
     private int runs;
     private int ballsFaced;
     private int fours;
     private int sixes;
     private boolean isOut;
+    private String battingStatus;
     private int wicketsTaken;
     private int runsConceded;
 
     public Player(String name) {
         this.name = name;
+        this.battingStatus = "not out";
     }
 
     public void addRuns(int runsScored) {
@@ -30,6 +32,16 @@ public class Player {
 
     public void setOut(boolean out) {
         this.isOut = out;
+        this.battingStatus = out ? "out" : "not out";
+    }
+
+    public void setBattingStatus(String battingStatus, boolean out) {
+        this.isOut = out;
+        if (battingStatus == null || battingStatus.trim().isEmpty()) {
+            this.battingStatus = out ? "out" : "not out";
+            return;
+        }
+        this.battingStatus = battingStatus.trim().toLowerCase();
     }
 
     public String getName() {
@@ -54,6 +66,10 @@ public class Player {
 
     public boolean isOut() {
         return isOut;
+    }
+
+    public String getBattingStatus() {
+        return battingStatus;
     }
 
     // bowling stats

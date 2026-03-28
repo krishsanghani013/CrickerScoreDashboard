@@ -34,9 +34,8 @@ logs/
 # Project-local documentation not needed in Git
 FEATURES.md
 
-
-#txt files
-*.txt
+# Generated text outputs
+/data/scorecards/*.txt
 events.txt
 output.txt
 sources.txt
