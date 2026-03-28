@@ -1,6 +1,9 @@
 package scoreboard;
 
 import exception.InvalidBallInputException;
+import filemanagement.ScorecardFileManager;
+import filemanagement.ScorecardFormatter;
+import java.nio.file.Path;
 import java.util.Random;
 import java.util.Scanner;
 import match.Match;
@@ -16,6 +19,8 @@ public class ScoreboardManager implements Statistics {
     private final Scanner scanner;
     private final boolean autoMode;
     private final Random random;
+    private final ScorecardFileManager scorecardFileManager;
+    private final ScorecardFormatter scorecardFormatter;
 
     public ScoreboardManager(Match match, Scanner scanner) {
         this(match, scanner, false, new Random());
@@ -26,6 +31,8 @@ public class ScoreboardManager implements Statistics {
         this.scanner = scanner;
         this.autoMode = autoMode;
         this.random = random == null ? new Random() : random;
+        this.scorecardFileManager = new ScorecardFileManager();
+        this.scorecardFormatter = new ScorecardFormatter(match, match.getTeamA(), match.getTeamB());
     }
 
     public void startMatch(Team firstBattingTeam) {
@@ -43,6 +50,7 @@ public class ScoreboardManager implements Statistics {
         displayMatchResult(inn1, inn2);
         displayOverallStats(inn1, inn2);
         askTeamForPlayerScores(match.getTeamA(), match.getTeamB());
+        askToSaveScorecard(inn1, inn2);
     }
 
     private InningsScore playInnings(Team bat, Team bowl, int target) {
@@ -426,42 +434,11 @@ public class ScoreboardManager implements Statistics {
     }
 
     private void displayMatchResult(InningsScore inn1, InningsScore inn2) {
-        int run1 = inn1.getTotalRuns();
-        int run2 = inn2.getTotalRuns();
-
-        System.out.println("\n======================================");
-        System.out.println("MATCH RESULT");
-        System.out.println("======================================");
-
-        if (run2 > run1) {
-            int wk = Match.MAX_WICKETS - inn2.getWickets();
-            System.out.println("Winner: " + inn2.getBattingTeam().getName() + " by " + wk + " wickets.");
-        } else if (run1 > run2) {
-            int diff = run1 - run2;
-            System.out.println("Winner: " + inn1.getBattingTeam().getName() + " by " + diff + " runs.");
-        } else {
-            System.out.println("Match Tied!");
-        }
+        System.out.println(scorecardFormatter.buildMatchResult(inn1, inn2));
     }
 
     private void displayOverallStats(InningsScore inn1, InningsScore inn2) {
-        System.out.println("\n======================================");
-        System.out.println("FINAL OVERALL STATISTICS");
-        System.out.println("======================================");
-        showTeamLine(inn1);
-        showTeamLine(inn2);
-
-        System.out.println("\nOverall 4s: " + (inn1.getFours() + inn2.getFours()));
-        System.out.println("Overall 6s: " + (inn1.getSixes() + inn2.getSixes()));
-        System.out.println("Overall Wides: " + (inn1.getWides() + inn2.getWides()));
-        System.out.println("Overall No Balls: " + (inn1.getNoBalls() + inn2.getNoBalls()));
-        System.out.println("Overall Wickets: " + (inn1.getWickets() + inn2.getWickets()));
-
-        Player mvp = determineMVP(match.getTeamA(), match.getTeamB());
-        if (mvp != null) {
-            System.out.println("\nMVP (Player of the Match): " + mvp.getName() + " | Runs: " + mvp.getRuns()
-                    + ", Wickets: " + mvp.getWicketsTaken() + ", Runs Conceded: " + mvp.getRunsConceded());
-        }
+        System.out.println(scorecardFormatter.buildOverallStats(inn1, inn2));
     }
 
     // team suummary
@@ -541,6 +518,63 @@ public class ScoreboardManager implements Statistics {
                     + " (" + p.getBallsFaced() + ") 4s:" + p.getFours() + " 6s:" + p.getSixes()
                     + " | Wkts:" + p.getWicketsTaken() + " RunsConceded:" + p.getRunsConceded()
                     + " [" + status + "]");
+        }
+    }
+
+    private void askToSaveScorecard(InningsScore inn1, InningsScore inn2) {
+        System.out.print("\nDo you want to save the match score in a .txt file? (y/N): ");
+        if (!scanner.hasNextLine()) {
+            return;
+        }
+
+        String saveChoice = scanner.nextLine().trim();
+        if (saveChoice.isEmpty()) {
+            return;
+        }
+
+        char answer = Character.toLowerCase(saveChoice.charAt(0));
+        if (answer != 'y' && answer != '1' && answer != 't') {
+            return;
+        }
+
+        System.out.println("\nWhich team's score do you want to save?");
+        System.out.println("1- " + inn1.getBattingTeam().getName());
+        System.out.println("2- " + inn2.getBattingTeam().getName());
+        System.out.println("3- Both");
+
+        int scoreChoice;
+        try {
+            scoreChoice = readInt("Enter choice: ");
+        } catch (InvalidBallInputException e) {
+            System.out.println("Invalid choice. Score not saved.");
+            return;
+        }
+
+        System.out.print("Enter file name: ");
+        if (!scanner.hasNextLine()) {
+            System.out.println("File name not provided. Score not saved.");
+            return;
+        }
+
+        String fileName = scanner.nextLine().trim();
+        if (fileName.isEmpty()) {
+            System.out.println("Invalid file name. Score not saved.");
+            return;
+        }
+
+        String content = scorecardFormatter.buildFileContent(scoreChoice, inn1, inn2);
+        if (content == null) {
+            System.out.println("Invalid choice. Score not saved.");
+            return;
+        }
+
+        try {
+            Path savedPath = scorecardFileManager.saveScorecard(fileName, content);
+            System.out.println("Score saved successfully in " + savedPath);
+        } catch (IllegalArgumentException e) {
+            System.out.println("Invalid file name. Score not saved.");
+        } catch (Exception e) {
+            System.out.println("Error while saving file: " + e.getMessage());
         }
     }
 }

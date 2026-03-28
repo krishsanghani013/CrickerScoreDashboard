@@ -1,16 +1,15 @@
 package main;
 
 import exception.InvalidBallInputException;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.util.Random;
+import java.util.Scanner;
 import match.Match;
 import match.ODIMatch;
 import match.T20Match;
 import scoreboard.ScoreboardManager;
 import team.Team;
-
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.util.Random;
-import java.util.Scanner;
 
 public class CricketScoreboardApplication {
     public static void main(String[] args) {
@@ -73,7 +72,8 @@ public class CricketScoreboardApplication {
                 throw new InvalidBallInputException("Invalid batting team selection.");
             }
 
-            boolean autoMode = readYesNo(sc, "Enable auto-simulation mode (random events without manual input)? (y/N): ");
+            boolean autoMode = readYesNo(sc,
+                    "Enable auto-simulation mode (random events without manual input)? (y/N): ");
             Random random = new Random();
 
             ScoreboardManager manager = new ScoreboardManager(match, sc, autoMode, random);
